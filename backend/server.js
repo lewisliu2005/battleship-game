@@ -115,6 +115,24 @@ function emitGameState(room, roomCode) {
   });
 }
 
+function startPlacementTimer(room, code) {
+  if (room.placementTimerId) clearTimeout(room.placementTimerId);
+  room.placementTimerId = setTimeout(() => {
+    // If placement takes more than 45s, kick both players to lobby
+    if (room && (!room.ready[0] || !room.ready[1])) {
+      room.players.forEach(p => {
+        if (p) {
+          p.emit('opponent_disconnected');
+          p.leave(code);
+          p.roomCode = null;
+          p.playerIdx = null;
+        }
+      });
+      rooms.delete(code);
+    }
+  }, 45000);
+}
+
 // ── AI 遊戲房間 ────────────────────────────────────────
 // aiRooms: socketId -> { state, difficulty, playerShips, aiShips }
 const aiRooms = new Map();
@@ -183,6 +201,7 @@ io.on('connection', (socket) => {
       socket.join(code);
       opponent.emit('matched', { roomCode: code, playerIdx: 0 });
       socket.emit('matched', { roomCode: code, playerIdx: 1 });
+      startPlacementTimer(room, code);
     } else {
       waitingQueue = socket;
       socket.emit('waiting');
@@ -220,6 +239,7 @@ io.on('connection', (socket) => {
     socket.join(code);
     socket.emit('joined_room', { roomCode: code, playerIdx: 1 });
     room.players[0].emit('opponent_joined');
+    startPlacementTimer(room, code);
   });
 
   // ── 取消等待 ──
@@ -250,6 +270,7 @@ io.on('connection', (socket) => {
 
     // 雙方都準備好了
     if (room.ready[0] && room.ready[1]) {
+      if (room.placementTimerId) clearTimeout(room.placementTimerId);
       const firstPlayer = Math.random() < 0.5 ? 0 : 1;
       room.state = createGameState(room.ships[0], room.ships[1], firstPlayer);
       startTurnTimer(room, code);
@@ -396,6 +417,7 @@ io.on('connection', (socket) => {
       room.state = null;
       room.ready = [false, false];
       room.ships = [null, null];
+      startPlacementTimer(room, code);
     }
     // 不用發送事件，因為雙方前端按下再來一局後都會自行回到 PLACEMENT 畫面
   });
@@ -413,6 +435,7 @@ io.on('connection', (socket) => {
     if (code) {
       const room = rooms.get(code);
       if (room) {
+        if (room.placementTimerId) clearTimeout(room.placementTimerId);
         const oppIdx = 1 - socket.playerIdx;
         const opp = room.players[oppIdx];
         if (opp) opp.emit('opponent_disconnected');
@@ -434,6 +457,7 @@ io.on('connection', (socket) => {
     if (code) {
       const room = rooms.get(code);
       if (room) {
+        if (room.placementTimerId) clearTimeout(room.placementTimerId);
         const oppIdx = 1 - socket.playerIdx;
         const opp = room.players[oppIdx];
         if (opp) opp.emit('opponent_disconnected');
