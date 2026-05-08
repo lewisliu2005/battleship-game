@@ -1,8 +1,12 @@
 // src/components/PlacementScreen.jsx
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { GRID_SIZE, SHIPS_TO_PLACE, randomPlacementFE } from '../utils/gameUtils';
+import ShipSVG from './ShipSVG';
+import { sfxClick, sfxPlace, sfxUnplace } from '../utils/audioEngine';
 
 const SHIP_SIZES = [3, 2, 2, 1];
+const CELL_PX = 56; // w-14 = 56px
+const GAP_PX = 4;   // gap-1 = 4px
 
 function isValidPlacement(placedShips, newCells) {
   const forbidden = new Set();
@@ -77,6 +81,7 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
     const inBounds = cells.every(([nr, nc]) => nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE);
     if (!inBounds || !isValidPlacement(placedShips, cells)) return;
 
+    sfxPlace();
     const newShips = [...placedShips, { cells, shipIndex: currentShipIdx }];
     setPlacedShips(newShips);
     setCurrentShipIdx((prev) => prev + 1);
@@ -84,6 +89,7 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
   }, [currentSize, isHorizontal, placedShips, currentShipIdx, submitted]);
 
   const handleReset = () => {
+    sfxClick();
     setPlacedShips([]);
     setCurrentShipIdx(0);
     setHoverCells([]);
@@ -91,6 +97,7 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
   };
 
   const handleRandomize = () => {
+    sfxPlace();
     const ships = randomPlacementFE();
     setPlacedShips(ships);
     setCurrentShipIdx(SHIP_SIZES.length);
@@ -99,6 +106,7 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
 
   const handleRemoveLast = () => {
     if (placedShips.length === 0) return;
+    sfxUnplace();
     setPlacedShips((prev) => prev.slice(0, -1));
     setCurrentShipIdx((prev) => prev - 1);
   };
@@ -147,45 +155,68 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
             <span className="text-white/40 text-xs">（點擊切換）</span>
           </button>
 
-          {/* 5x5 棋盤 */}
-          <div
-            className="grid gap-1 p-3 glass-card animate-glow"
-            style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, 3.5rem)` }}
-            onMouseLeave={() => setHoverCells([])}
-          >
-            {Array.from({ length: GRID_SIZE }, (_, r) =>
-              Array.from({ length: GRID_SIZE }, (_, c) => {
-                const key = `${r},${c}`;
-                const isOccupied = key in occupiedMap;
-                const shipSi = occupiedMap[key];
-                const isHover = hoverSet.has(key);
-                const isShip = isOccupied;
+          {/* 5x5 棋盤 + 船艦 Overlay */}
+          <div className="relative ship-grid-wrapper">
+            <div
+              className="grid gap-1 p-3 glass-card animate-glow"
+              style={{ gridTemplateColumns: `repeat(${GRID_SIZE}, 3.5rem)` }}
+              onMouseLeave={() => setHoverCells([])}
+            >
+              {Array.from({ length: GRID_SIZE }, (_, r) =>
+                Array.from({ length: GRID_SIZE }, (_, c) => {
+                  const key = `${r},${c}`;
+                  const isOccupied = key in occupiedMap;
+                  const isHover = hoverSet.has(key);
 
-                let cellClass =
-                  'w-14 h-14 rounded-lg border transition-all duration-100 cursor-pointer flex items-center justify-center text-xl ';
+                  let cellClass =
+                    'w-14 h-14 rounded border transition-all duration-100 cursor-pointer flex items-center justify-center ';
 
-                if (isShip && !isHover) {
-                  cellClass += 'bg-sky-600/80 border-sky-400/60 shadow-inner shadow-sky-900/50 ';
-                } else if (isHover && hoverValid) {
-                  cellClass += 'bg-emerald-500/60 border-emerald-400 scale-105 ';
-                } else if (isHover && !hoverValid) {
-                  cellClass += 'bg-red-500/50 border-red-400 cursor-not-allowed ';
-                } else {
-                  cellClass += 'bg-navy-800/60 border-white/10 hover:bg-white/10 hover:border-white/30 ';
-                }
+                  if (isOccupied && !isHover) {
+                    cellClass += 'bg-blue-700/30 border-yellow-400/20 ';
+                  } else if (isHover && hoverValid) {
+                    cellClass += 'bg-yellow-400/20 border-yellow-400 scale-105 ';
+                  } else if (isHover && !hoverValid) {
+                    cellClass += 'bg-red-500/30 border-red-400 cursor-not-allowed ';
+                  } else {
+                    cellClass += 'bg-steel-800/60 border-white/8 hover:bg-white/8 hover:border-yellow-400/20 ';
+                  }
 
-                return (
-                  <div
-                    key={key}
-                    className={cellClass}
-                    onMouseEnter={() => handleHover(r, c)}
-                    onClick={() => handleClick(r, c)}
-                  >
-                    {isShip && <span>🚢</span>}
-                  </div>
-                );
-              })
-            )}
+                  return (
+                    <div
+                      key={key}
+                      className={cellClass}
+                      onMouseEnter={() => handleHover(r, c)}
+                      onClick={() => handleClick(r, c)}
+                    />
+                  );
+                })
+              )}
+            </div>
+
+            {/* Ship SVG overlays */}
+            {placedShips.map((ship, si) => {
+              const { cells } = ship;
+              if (!cells || cells.length === 0) return null;
+              const minR = Math.min(...cells.map(([r]) => r));
+              const minC = Math.min(...cells.map(([, c]) => c));
+              const maxR = Math.max(...cells.map(([r]) => r));
+              const maxC = Math.max(...cells.map(([, c]) => c));
+              const isH = minR === maxR;
+              const size = cells.length;
+              const top = 12 + minR * (CELL_PX + GAP_PX);
+              const left = 12 + minC * (CELL_PX + GAP_PX);
+              const w = isH ? size * CELL_PX + (size - 1) * GAP_PX : CELL_PX;
+              const h = isH ? CELL_PX : size * CELL_PX + (size - 1) * GAP_PX;
+              return (
+                <div
+                  key={si}
+                  className="ship-overlay"
+                  style={{ top, left, width: w, height: h }}
+                >
+                  <ShipSVG size={size} isHorizontal={isH} />
+                </div>
+              );
+            })}
           </div>
 
           {/* 操作按鈕 */}

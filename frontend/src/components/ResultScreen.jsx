@@ -1,6 +1,7 @@
 // src/components/ResultScreen.jsx
 import { useEffect, useState } from 'react';
 import { GRID_SIZE } from '../utils/gameUtils';
+import { sfxVictory, sfxDefeat, sfxClick } from '../utils/audioEngine';
 
 const CONFETTI_COLORS = ['#38bdf8', '#818cf8', '#34d399', '#fbbf24', '#f87171', '#e879f9'];
 
@@ -67,6 +68,7 @@ export default function ResultScreen({ isWinner, myShips, myAttacksReceived, myA
 
   useEffect(() => {
     if (isWinner) {
+      sfxVictory();
       setConfetti(
         Array.from({ length: 40 }, (_, i) => ({
           id: i,
@@ -76,6 +78,8 @@ export default function ResultScreen({ isWinner, myShips, myAttacksReceived, myA
           size: `${6 + Math.floor(Math.random() * 8)}px`,
         }))
       );
+    } else {
+      sfxDefeat();
     }
   }, [isWinner]);
 
@@ -117,11 +121,11 @@ export default function ResultScreen({ isWinner, myShips, myAttacksReceived, myA
 
       {/* Actions */}
       <div className="flex gap-4">
-        <button onClick={onPlayAgain} className="btn-primary text-base px-8 py-3">
+        <button onClick={() => { sfxClick(); onPlayAgain(); }} className="btn-primary text-base px-8 py-3">
           🔁 再來一局
         </button>
-        <button onClick={onLobby} className="btn-ghost text-base px-6 py-3">
-          🏠 回到大廳
+        <button onClick={() => { sfxClick(); onLobby(); }} className="btn-ghost text-base px-6 py-3">
+          ← 回到大廳
         </button>
       </div>
     </div>

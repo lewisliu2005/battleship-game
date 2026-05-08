@@ -5,6 +5,8 @@ import LobbyScreen from './components/LobbyScreen';
 import PlacementScreen from './components/PlacementScreen';
 import BattleScreen from './components/BattleScreen';
 import ResultScreen from './components/ResultScreen';
+import AudioControls from './components/AudioControls';
+import { startBGM } from './utils/audioEngine';
 
 const PHASE = {
   LOBBY: 'LOBBY',
@@ -28,6 +30,21 @@ export default function App() {
   const [gameState, setGameState] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
   const [isWinner, setIsWinner] = useState(false);
+
+  // BGM 首次互動後啟動
+  useEffect(() => {
+    const handleFirst = () => {
+      startBGM();
+      window.removeEventListener('click', handleFirst);
+      window.removeEventListener('keydown', handleFirst);
+    };
+    window.addEventListener('click', handleFirst);
+    window.addEventListener('keydown', handleFirst);
+    return () => {
+      window.removeEventListener('click', handleFirst);
+      window.removeEventListener('keydown', handleFirst);
+    };
+  }, []);
 
   // ── 通知顯示 ──────────────────────────────────────
   const [toast, setToast] = useState(null);
@@ -333,5 +350,6 @@ export default function App() {
         />
       )}
     </div>
+    <AudioControls />
   );
 }

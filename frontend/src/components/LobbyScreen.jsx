@@ -1,6 +1,7 @@
 // src/components/LobbyScreen.jsx
 import { useState } from 'react';
 import socket from '../socket';
+import { sfxClick } from '../utils/audioEngine';
 
 const MODE_CARDS = [
   {
@@ -63,6 +64,7 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
   const [joinError, setJoinError] = useState('');
 
   const handleCardClick = (id) => {
+    sfxClick();
     if (id === 'quick') {
       onModeSelect({ mode: 'quick' });
     } else {
@@ -71,17 +73,20 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
   };
 
   const handleCreateRoom = () => {
+    sfxClick();
     setRoomAction('create');
     onModeSelect({ mode: 'create_room' });
   };
 
   const handleJoinRoom = () => {
     if (!roomCode.trim()) return;
+    sfxClick();
     setJoinError('');
     onModeSelect({ mode: 'join_room', roomCode: roomCode.trim().toUpperCase() });
   };
 
   const handleAIDifficulty = (difficulty) => {
+    sfxClick();
     onModeSelect({ mode: 'ai', difficulty });
   };
 
@@ -89,11 +94,11 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
       {/* Header */}
       <div className="text-center mb-12 animate-float">
-        <div className="text-7xl mb-4">⚓</div>
-        <h1 className="text-5xl font-black tracking-tight bg-gradient-to-r from-sky-400 via-blue-300 to-violet-400 bg-clip-text text-transparent mb-3">
+        <div className="text-6xl mb-3" style={{ filter: 'drop-shadow(0 0 20px rgba(245,166,35,0.6))' }}>⚙</div>
+        <h1 className="text-5xl font-black tracking-widest mb-2" style={{ color: '#F5A623', textShadow: '0 0 30px rgba(245,166,35,0.4)', fontFamily: "'Rajdhani', sans-serif" }}>
           海戰棋
         </h1>
-        <p className="text-white/50 text-lg">BATTLESHIP ONLINE</p>
+        <p className="text-white/30 text-xs tracking-widest uppercase" style={{ fontFamily: "'Share Tech Mono', monospace" }}>BATTLESHIP // ONLINE</p>
       </div>
 
       {/* Mode Cards */}
