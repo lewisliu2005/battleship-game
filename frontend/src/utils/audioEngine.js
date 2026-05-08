@@ -272,3 +272,11 @@ export function sfxYourTurn() {
   note(660, c.currentTime, 0.05, g, 'sine', 0.01, 0.12);
   note(880, c.currentTime + 0.1, 0.05, g, 'sine', 0.01, 0.15);
 }
+
+// 倒數警報音效
+export function sfxAlarm() {
+  const c = getCtx();
+  const g = makeSFXGain();
+  note(1200, c.currentTime, 0.1, g, 'square', 0.01, 0.1);
+  note(800, c.currentTime + 0.15, 0.1, g, 'square', 0.01, 0.1);
+}
