@@ -1,8 +1,8 @@
 // src/components/PlacementScreen.jsx
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { GRID_SIZE, SHIPS_TO_PLACE, randomPlacementFE } from '../utils/gameUtils';
 import ShipSVG from './ShipSVG';
-import { sfxClick, sfxPlace, sfxUnplace } from '../utils/audioEngine';
+import { sfxClick, sfxPlace, sfxUnplace, sfxAlarm } from '../utils/audioEngine';
 
 const SHIP_SIZES = [3, 2, 2, 1];
 const CELL_PX = 56; // w-14 = 56px
@@ -46,7 +46,7 @@ function getCells(r, c, size, isHorizontal) {
   return cells;
 }
 
-export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, aiDifficulty, opponentReady, onLeave }) {
+export default function PlacementScreen({ onReady, onCancelReady, roomCode, playerIdx, isAI, aiDifficulty, opponentReady, onLeave }) {
   const [placedShips, setPlacedShips] = useState([]);
   const [currentShipIdx, setCurrentShipIdx] = useState(0);
   const [isHorizontal, setIsHorizontal] = useState(true);
@@ -55,6 +55,41 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
   const [submitted, setSubmitted] = useState(false);
 
   const currentSize = currentShipIdx < SHIP_SIZES.length ? SHIP_SIZES[currentShipIdx] : null;
+
+  // ── 30秒倒數計時 ──
+  const [timeLeft, setTimeLeft] = useState(30);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (submitted) return; // 已準備則停止計時
+
+    timerRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev === 11) sfxAlarm(); // 剩餘 10 秒時發出警報（prev 11 -> 10）
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timerRef.current);
+  }, [submitted]);
+
+  useEffect(() => {
+    if (timeLeft === 0 && !submitted) {
+      // 時間到自動幫擺
+      let currentShips = [...placedShips];
+      if (currentShips.length < SHIP_SIZES.length) {
+        currentShips = randomPlacementFE();
+        setPlacedShips(currentShips);
+        setCurrentShipIdx(SHIP_SIZES.length);
+      }
+      setSubmitted(true);
+      onReady(currentShips);
+    }
+  }, [timeLeft, submitted, placedShips, onReady]);
 
   // 計算格子狀態
   const occupiedMap = {};
@@ -113,8 +148,15 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
 
   const handleSubmit = () => {
     if (placedShips.length < SHIP_SIZES.length) return;
+    sfxClick();
     setSubmitted(true);
     onReady(placedShips);
+  };
+
+  const handleCancelReady = () => {
+    sfxClick();
+    setSubmitted(false);
+    onCancelReady();
   };
 
   const allPlaced = currentShipIdx >= SHIP_SIZES.length;
@@ -129,6 +171,12 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
           <h1 className="text-3xl font-black mb-1 bg-gradient-to-r from-sky-400 to-blue-300 bg-clip-text text-transparent">
             📍 佈署艦隊
           </h1>
+          {/* 計時器 */}
+          {!submitted && (
+            <div className={`text-2xl font-bold tracking-widest ${timeLeft <= 10 ? 'text-red-500 animate-pulse' : 'text-yellow-400'}`}>
+              00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+            </div>
+          )}
           {!isAI && roomCode && (
             <p className="text-white/40 text-sm">
               房號：<span className="text-ocean-400 font-bold tracking-widest">{roomCode}</span>
@@ -221,13 +269,13 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
 
           {/* 操作按鈕 */}
           <div className="flex gap-2 flex-wrap justify-center">
-            <button onClick={handleRandomize} className="btn-warning text-sm">
+            <button onClick={handleRandomize} disabled={submitted} className="btn-warning text-sm disabled:opacity-40">
               🎲 一鍵隨機
             </button>
-            <button onClick={handleRemoveLast} disabled={placedShips.length === 0} className="btn-ghost text-sm disabled:opacity-40">
+            <button onClick={handleRemoveLast} disabled={placedShips.length === 0 || submitted} className="btn-ghost text-sm disabled:opacity-40">
               ↩ 撤回
             </button>
-            <button onClick={handleReset} disabled={placedShips.length === 0} className="btn-danger text-sm disabled:opacity-40">
+            <button onClick={handleReset} disabled={placedShips.length === 0 || submitted} className="btn-danger text-sm disabled:opacity-40">
               🗑 清除
             </button>
           </div>
@@ -273,9 +321,17 @@ export default function PlacementScreen({ onReady, roomCode, playerIdx, isAI, ai
               </div>
             )}
             {submitted && !isAI ? (
-              <div className="text-sky-400 text-sm text-center animate-pulse">
-                ⏳ 等待對手佈署...
-              </div>
+              <>
+                <div className="text-sky-400 text-sm text-center animate-pulse mb-2">
+                  ⏳ 等待對手佈署...
+                </div>
+                <button
+                  onClick={handleCancelReady}
+                  className="btn-danger w-full mt-2"
+                >
+                  ❌ 取消準備
+                </button>
+              </>
             ) : (
               <button
                 onClick={handleSubmit}

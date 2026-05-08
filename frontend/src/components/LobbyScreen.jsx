@@ -62,6 +62,7 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
   const [roomAction, setRoomAction] = useState(null); // 'create' | 'join'
   const [roomCode, setRoomCode] = useState('');
   const [joinError, setJoinError] = useState('');
+  const [turnTime, setTurnTime] = useState(20);
 
   const handleCardClick = (id) => {
     sfxClick();
@@ -74,8 +75,11 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
 
   const handleCreateRoom = () => {
     sfxClick();
-    setRoomAction('create');
-    onModeSelect({ mode: 'create_room' });
+    if (roomAction !== 'create') {
+      setRoomAction('create');
+    } else {
+      onModeSelect({ mode: 'create_room', turnTime });
+    }
   };
 
   const handleJoinRoom = () => {
@@ -137,6 +141,29 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
               ▶ 加入房間
             </button>
           </div>
+          
+          {roomAction === 'create' && (
+            <div className="space-y-3 animate-in fade-in zoom-in duration-200">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-white/50 uppercase tracking-widest">每回合時間限制</label>
+                <div className="flex gap-2">
+                  {[20, 30, 45, 60].map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setTurnTime(t)}
+                      className={`flex-1 py-2 rounded text-sm transition-colors ${turnTime === t ? 'bg-sky-500 text-white font-bold' : 'bg-steel-800 text-white/60 hover:bg-steel-700'}`}
+                    >
+                      {t}s
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={handleCreateRoom} className="btn-primary w-full shadow-lg shadow-sky-500/20">
+                ✅ 確認建立
+              </button>
+            </div>
+          )}
+
           {roomAction === 'join' && (
             <div className="space-y-2">
               <input

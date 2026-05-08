@@ -30,21 +30,13 @@ export default function App() {
   const [gameState, setGameState] = useState(null);
   const [lastEvent, setLastEvent] = useState(null);
   const [isWinner, setIsWinner] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
 
   // BGM 首次互動後啟動
-  useEffect(() => {
-    const handleFirst = () => {
-      startBGM();
-      window.removeEventListener('click', handleFirst);
-      window.removeEventListener('keydown', handleFirst);
-    };
-    window.addEventListener('click', handleFirst);
-    window.addEventListener('keydown', handleFirst);
-    return () => {
-      window.removeEventListener('click', handleFirst);
-      window.removeEventListener('keydown', handleFirst);
-    };
-  }, []);
+  const handleStart = () => {
+    startBGM();
+    setHasStarted(true);
+  };
 
   // ── 通知顯示 ──────────────────────────────────────
   const [toast, setToast] = useState(null);
@@ -117,6 +109,12 @@ export default function App() {
       showToast('✅ 對手已完成佈署', 'info');
     });
 
+    // 對手取消準備
+    socket.on('opponent_unready', () => {
+      setOpponentReady(false);
+      showToast('⚠️ 對手取消了準備', 'warning');
+    });
+
     // 遊戲開始
     socket.on('game_start', ({ firstPlayer }) => {
       setPhase(PHASE.BATTLE);
@@ -166,6 +164,15 @@ export default function App() {
       setTimeout(() => resetToLobby(), 2000);
     });
 
+    // 回合逾時被跳過
+    socket.on('turn_skipped', ({ missedPlayer }) => {
+      if (missedPlayer === playerIdx) {
+        showToast('⏰ 時間到！你的回合被跳過了！', 'error');
+      } else {
+        showToast('⏰ 對手超時！換你攻擊！', 'success');
+      }
+    });
+
     return () => {
       socket.off('waiting');
       socket.off('matched');
@@ -176,22 +183,24 @@ export default function App() {
       socket.off('placement_ok');
       socket.off('placement_error');
       socket.off('opponent_ready');
+      socket.off('opponent_unready');
       socket.off('game_start');
       socket.off('game_update');
       socket.off('attack_result');
       socket.off('ai_attack');
       socket.off('ai_game_start');
       socket.off('opponent_disconnected');
+      socket.off('turn_skipped');
     };
   }, [playerIdx, showToast]);
 
   // ── 模式選擇 ─────────────────────────────────────
-  const handleModeSelect = useCallback(({ mode: m, roomCode: rc, difficulty }) => {
+  const handleModeSelect = useCallback(({ mode: m, roomCode: rc, difficulty, turnTime }) => {
     if (m === 'quick') {
       setMode('quick');
       socket.emit('quick_match');
     } else if (m === 'create_room') {
-      socket.emit('create_room');
+      socket.emit('create_room', { turnTime });
     } else if (m === 'join_room') {
       socket.emit('join_room', { roomCode: rc });
     } else if (m === 'ai') {
@@ -217,6 +226,11 @@ export default function App() {
       socket.emit('submit_placement', { ships });
     }
   }, [mode, aiDifficulty]);
+
+  // ── 取消準備 ────────────────────────────────────
+  const handleCancelReady = useCallback(() => {
+    socket.emit('cancel_placement');
+  }, []);
 
   // ── 攻擊 ────────────────────────────────────────
   const handleAttack = useCallback((row, col) => {
@@ -262,9 +276,20 @@ export default function App() {
   }, [mode, resetToLobby]);
 
   // ── 渲染 ─────────────────────────────────────────
+  if (!hasStarted) {
+    return (
+      <div className="min-h-screen wave-bg flex items-center justify-center font-sans text-white bg-navy-900 cursor-pointer" onClick={handleStart}>
+        <div className="glass-card p-12 text-center animate-pulse">
+          <h1 className="text-4xl font-black mb-4 tracking-widest text-yellow-400">進入海域</h1>
+          <p className="text-white/50 tracking-wider">點擊畫面任一處開始遊戲與音效</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-    <div className="wave-bg min-h-screen">
+    <div className="wave-bg min-h-screen font-sans text-white bg-navy-900">
       {/* Toast 通知 */}
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-2xl text-sm font-semibold shadow-xl backdrop-blur-sm transition-all duration-300 ${
@@ -310,6 +335,7 @@ export default function App() {
       {phase === PHASE.PLACEMENT && (
         <PlacementScreen
           onReady={handleReady}
+          onCancelReady={handleCancelReady}
           roomCode={roomCode}
           playerIdx={playerIdx}
           isAI={mode === 'ai'}
@@ -333,6 +359,7 @@ export default function App() {
           gameOver={gameState.gameOver}
           winner={gameState.winner}
           lastEvent={lastEvent}
+          turnDeadline={gameState.turnDeadline}
           onLeave={handleLeaveGame}
         />
       )}

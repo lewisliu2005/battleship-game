@@ -46,6 +46,44 @@ function getRemainingShipSizes(gameState, playerIdx) {
     .map((s) => s.cells.length);
 }
 
+function startTurnTimer(room, code, isAI = false, socket = null) {
+  if (room.timerId) clearTimeout(room.timerId);
+  if (room.state && !room.state.gameOver) {
+    const timeLimit = (room.turnTime || 20) * 1000;
+    room.turnDeadline = Date.now() + timeLimit;
+    
+    room.timerId = setTimeout(() => {
+      // 沒收回合換對方攻擊
+      room.state.currentTurn = 1 - room.state.currentTurn;
+      
+      if (isAI && socket) {
+        // AI 房間
+        socket.emit('game_update', {
+          myShips: room.state.players[0].ships,
+          myAttacksReceived: room.state.players[0].attacks,
+          myAttacksDone: room.state.players[1].attacks,
+          oppShips: null,
+          currentTurn: room.state.currentTurn,
+          gameOver: room.state.gameOver,
+          winner: room.state.winner,
+          myIdx: 0,
+          turnDeadline: room.turnDeadline // 下一個回合的時間戳記會被覆蓋，這裡只是廣播
+        });
+        if (room.state.currentTurn === 1) {
+          setTimeout(() => doAIMove(socket, room), 800);
+        } else {
+          startTurnTimer(room, code, true, socket); // 輪回玩家，重新計時
+        }
+      } else {
+        // PvP 房間
+        io.to(code).emit('turn_skipped', { missedPlayer: 1 - room.state.currentTurn });
+        startTurnTimer(room, code);
+        emitGameState(room, code);
+      }
+    }, timeLimit);
+  }
+}
+
 function emitGameState(room, roomCode) {
   const { players, state } = room;
 
@@ -72,6 +110,7 @@ function emitGameState(room, roomCode) {
       gameOver: state.gameOver,
       winner: state.winner,
       myIdx: idx,
+      turnDeadline: room.turnDeadline,
     });
   });
 }
@@ -106,11 +145,14 @@ function doAIMove(socket, aiRoom) {
     gameOver: state.gameOver,
     winner: state.winner,
     myIdx: 0,
+    turnDeadline: aiRoom.turnDeadline,
   });
 
   if (!state.gameOver && state.currentTurn === 1) {
     // AI 命中，繼續攻擊（稍微延遲模擬思考）
     setTimeout(() => doAIMove(socket, aiRoom), 800);
+  } else if (!state.gameOver && state.currentTurn === 0) {
+    startTurnTimer(aiRoom, socket.id, true, socket);
   }
 }
 
@@ -130,6 +172,7 @@ io.on('connection', (socket) => {
         ready: [false, false],
         ships: [null, null],
         type: 'pvp',
+        turnTime: 20,
       };
       rooms.set(code, room);
       opponent.roomCode = code;
@@ -147,7 +190,7 @@ io.on('connection', (socket) => {
   });
 
   // ── 建立房間 ──
-  socket.on('create_room', () => {
+  socket.on('create_room', ({ turnTime } = {}) => {
     const code = generateRoomCode();
     const room = {
       players: [socket, null],
@@ -155,6 +198,7 @@ io.on('connection', (socket) => {
       ready: [false, false],
       ships: [null, null],
       type: 'pvp',
+      turnTime: turnTime || 20,
     };
     rooms.set(code, room);
     socket.roomCode = code;
@@ -208,9 +252,27 @@ io.on('connection', (socket) => {
     if (room.ready[0] && room.ready[1]) {
       const firstPlayer = Math.random() < 0.5 ? 0 : 1;
       room.state = createGameState(room.ships[0], room.ships[1], firstPlayer);
+      startTurnTimer(room, code);
       io.to(code).emit('game_start', { firstPlayer });
       emitGameState(room, code);
     }
+  });
+
+  // ── 取消船隻擺放 ──
+  socket.on('cancel_placement', () => {
+    const code = socket.roomCode;
+    const room = rooms.get(code);
+    if (!room || room.state) return; // 已經開始遊戲則無法取消
+
+    const idx = socket.playerIdx;
+    room.ready[idx] = false;
+    room.ships[idx] = null;
+
+    socket.emit('placement_canceled');
+
+    // 通知對手自己取消準備
+    const opp = room.players[1 - idx];
+    if (opp) opp.emit('opponent_unready');
   });
 
   // ── 攻擊 ──
@@ -229,6 +291,11 @@ io.on('connection', (socket) => {
     io.to(code).emit('attack_result', { attackerIdx: idx, ...result });
 
     // 每次玩家攻擊完，必須發送完整的遊戲狀態給雙方，更新回合
+    if (!room.state.gameOver) {
+      startTurnTimer(room, code);
+    } else {
+      if (room.timerId) clearTimeout(room.timerId);
+    }
     emitGameState(room, code);
   });
 
@@ -243,8 +310,10 @@ io.on('connection', (socket) => {
     const firstPlayer = Math.random() < 0.5 ? 0 : 1;
     const state = createGameState(playerShips, aiShips, firstPlayer);
 
-    const aiRoom = { state, difficulty, aiShips };
+    const aiRoom = { state, difficulty, aiShips, turnTime: 20 };
     aiRooms.set(socket.id, aiRoom);
+    
+    startTurnTimer(aiRoom, socket.id, true, socket);
 
     socket.emit('ai_game_start', {
       firstPlayer,

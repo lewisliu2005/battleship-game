@@ -11,8 +11,8 @@ const CELL_STATES = {
   water:       { bg: 'bg-steel-800/70 border-white/8 hover:bg-yellow-400/10 hover:border-yellow-400/30', icon: null, cursor: 'cursor-crosshair' },
   ship:        { bg: 'bg-blue-700/40 border-yellow-400/15', icon: null, cursor: 'cursor-default' },
   hit:         { bg: 'bg-red-700 border-red-500 shadow-inner shadow-black/50', icon: '💥', cursor: 'cursor-default' },
-  miss:        { bg: 'bg-steel-950 border-steel-700', icon: '◌', cursor: 'cursor-default' },
-  'auto-miss': { bg: 'bg-steel-950/80 border-steel-700/80', icon: '◌', cursor: 'cursor-default' },
+  miss:        { bg: 'bg-black border-gray-800', icon: '❌', cursor: 'cursor-default' },
+  'auto-miss': { bg: 'bg-black/80 border-gray-800/80', icon: '❌', cursor: 'cursor-default' },
   sunk:        { bg: 'bg-alert/80 border-alert', icon: '✕', cursor: 'cursor-default' },
 };
 
@@ -52,12 +52,26 @@ export default function BattleScreen({
   gameOver,
   winner,
   lastEvent,
+  turnDeadline,
   onLeave,
 }) {
   const isMyTurn = currentTurn === myIdx;
   const [selectedCell, setSelectedCell] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(0);
   const prevTurnRef = useRef(isMyTurn);
   const prevEventRef = useRef(null);
+
+  // 倒數計時
+  useEffect(() => {
+    if (gameOver || !turnDeadline) return;
+    const updateTimer = () => {
+      const remaining = Math.max(0, Math.ceil((turnDeadline - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    };
+    updateTimer();
+    const timerId = setInterval(updateTimer, 500);
+    return () => clearInterval(timerId);
+  }, [turnDeadline, gameOver]);
 
   // 回合切換音效
   useEffect(() => {
@@ -239,13 +253,18 @@ export default function BattleScreen({
       {/* 狀態橫幅 */}
       {!gameOver && (
         <div
-          className={`mb-5 px-6 py-2.5 rounded status-banner font-bold text-sm uppercase tracking-widest transition-all duration-300 ${
+          className={`mb-5 px-6 py-2.5 rounded status-banner font-bold text-sm uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-4 ${
             isMyTurn
               ? 'text-yellow-400 border-yellow-500/30'
               : 'text-white/40 border-white/10'
           }`}
         >
-          {isMyTurn ? '▶ 你的回合' : isAI ? '⚙ AI 計算中...' : '⏸ 對手回合'}
+          <span>{isMyTurn ? '▶ 你的回合' : isAI ? '⚙ AI 計算中...' : '⏸ 對手回合'}</span>
+          {turnDeadline && (
+            <span className={`text-lg ml-2 ${timeLeft <= 5 ? 'text-red-500 animate-bounce' : ''}`} style={{ fontFamily: "'Share Tech Mono', monospace" }}>
+              00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}
+            </span>
+          )}
         </div>
       )}
 

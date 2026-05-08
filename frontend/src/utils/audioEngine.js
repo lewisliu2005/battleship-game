@@ -67,65 +67,11 @@ export function startBGM() {
   bgmGain.gain.value = bgmMuted ? 0 : bgmVolume;
   bgmGain.connect(c.destination);
 
-  // 海浪（低頻白噪音 + LFO）
-  const waveBuffer = c.createBuffer(1, c.sampleRate * 4, c.sampleRate);
-  const waveData = waveBuffer.getChannelData(0);
-  for (let i = 0; i < waveData.length; i++) waveData[i] = Math.random() * 2 - 1;
-  const waveSrc = c.createBufferSource();
-  waveSrc.buffer = waveBuffer;
-  waveSrc.loop = true;
-  const waveFilter = c.createBiquadFilter();
-  waveFilter.type = 'lowpass';
-  waveFilter.frequency.value = 320;
-  const waveLFO = c.createOscillator();
-  const waveLFOGain = c.createGain();
-  waveLFO.frequency.value = 0.18;
-  waveLFOGain.gain.value = 120;
-  waveLFO.connect(waveLFOGain);
-  waveLFOGain.connect(waveFilter.frequency);
-  const waveGain = c.createGain();
-  waveGain.gain.value = 0.28;
-  waveSrc.connect(waveFilter);
-  waveFilter.connect(waveGain);
-  waveGain.connect(bgmGain);
-  waveSrc.start();
-  waveLFO.start();
-  bgmNodes.waveSrc = waveSrc;
-  bgmNodes.waveLFO = waveLFO;
-
-  // 海風聲（粉紅噪音高頻）
-  const windBuffer = c.createBuffer(1, c.sampleRate * 6, c.sampleRate);
-  const windData = windBuffer.getChannelData(0);
-  let b0=0, b1=0, b2=0, b3=0, b4=0, b5=0;
-  for (let i = 0; i < windData.length; i++) {
-    const white = Math.random() * 2 - 1;
-    b0 = 0.99886 * b0 + white * 0.0555179;
-    b1 = 0.99332 * b1 + white * 0.0750759;
-    b2 = 0.96900 * b2 + white * 0.1538520;
-    b3 = 0.86650 * b3 + white * 0.3104856;
-    b4 = 0.55000 * b4 + white * 0.5329522;
-    b5 = -0.7616 * b5 - white * 0.0168980;
-    windData[i] = (b0 + b1 + b2 + b3 + b4 + b5) * 0.11;
-  }
-  const windSrc = c.createBufferSource();
-  windSrc.buffer = windBuffer;
-  windSrc.loop = true;
-  const windFilter = c.createBiquadFilter();
-  windFilter.type = 'highpass';
-  windFilter.frequency.value = 1200;
-  const windGain = c.createGain();
-  windGain.gain.value = 0.08;
-  windSrc.connect(windFilter);
-  windFilter.connect(windGain);
-  windGain.connect(bgmGain);
-  windSrc.start();
-  bgmNodes.windSrc = windSrc;
-
   // 海鷗聲（定期 FM 合成）
   let gullTimer = null;
   const playGull = () => {
     const g = c.createGain();
-    g.gain.value = 0.06;
+    g.gain.value = 0.04;
     g.connect(bgmGain);
     const carrier = c.createOscillator();
     const mod = c.createOscillator();
@@ -162,7 +108,7 @@ export function startBGM() {
     const freq = banjoScale[banjoPattern[patternIdx % banjoPattern.length]];
     patternIdx++;
     const g = c.createGain();
-    g.gain.value = 0.12;
+    g.gain.value = 0.08;
     g.connect(bgmGain);
     const osc = c.createOscillator();
     osc.type = 'sawtooth';
@@ -184,9 +130,6 @@ export function startBGM() {
 }
 
 export function stopBGM() {
-  if (bgmNodes.waveSrc) { try { bgmNodes.waveSrc.stop(); } catch(e) {} }
-  if (bgmNodes.waveLFO) { try { bgmNodes.waveLFO.stop(); } catch(e) {} }
-  if (bgmNodes.windSrc) { try { bgmNodes.windSrc.stop(); } catch(e) {} }
   if (bgmNodes.stopGull) bgmNodes.stopGull();
   if (bgmNodes.stopBanjo) bgmNodes.stopBanjo();
   bgmNodes = {};
