@@ -263,6 +263,7 @@ export default function App() {
 
   // ── 渲染 ─────────────────────────────────────────
   return (
+    <>
     <div className="wave-bg min-h-screen">
       {/* Toast 通知 */}
       {toast && (
@@ -351,5 +352,6 @@ export default function App() {
       )}
     </div>
     <AudioControls />
+    </>
   );
 }
