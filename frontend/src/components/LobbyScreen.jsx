@@ -174,7 +174,7 @@ export default function LobbyScreen({ onModeSelect, waitingForOpponent, onCancel
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && handleJoinRoom()}
-                className="input-field w-full uppercase tracking-widest text-center text-xl font-bold"
+                className="input-field w-full uppercase tracking-widest text-center text-xl font-bold text-black"
               />
               {joinError && <p className="text-red-400 text-xs text-center">{joinError}</p>}
               <button onClick={handleJoinRoom} className="btn-primary w-full">

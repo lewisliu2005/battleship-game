@@ -270,10 +270,23 @@ export default function App() {
       setMyPlacedShips(null);
       setOpponentReady(false);
       setPhase(PHASE.PLACEMENT);
+    } else if (mode === 'quick') {
+      socket.emit('leave_game');
+      setGameState(null);
+      setLastEvent(null);
+      setMyPlacedShips(null);
+      setOpponentReady(false);
+      setPhase(PHASE.LOBBY);
+      setTimeout(() => handleModeSelect({ mode: 'quick' }), 100);
     } else {
-      resetToLobby();
+      socket.emit('rematch');
+      setGameState(null);
+      setLastEvent(null);
+      setMyPlacedShips(null);
+      setOpponentReady(false);
+      setPhase(PHASE.PLACEMENT);
     }
-  }, [mode, resetToLobby]);
+  }, [mode, handleModeSelect]);
 
   // ── 渲染 ─────────────────────────────────────────
   if (!hasStarted) {

@@ -349,6 +349,12 @@ io.on('connection', (socket) => {
 
     socket.emit('attack_result', { attackerIdx: 0, ...result });
 
+    if (state.gameOver) {
+      if (aiRoom.timerId) clearTimeout(aiRoom.timerId);
+    } else {
+      startTurnTimer(aiRoom, socket.id, true, socket);
+    }
+
     // 更新遊戲狀態給玩家
     socket.emit('game_update', {
       myShips: state.players[0].ships,
@@ -359,6 +365,7 @@ io.on('connection', (socket) => {
       gameOver: state.gameOver,
       winner: state.winner,
       myIdx: 0,
+      turnDeadline: aiRoom.turnDeadline,
     });
 
     if (!state.gameOver && state.currentTurn === 1) {
@@ -377,6 +384,20 @@ io.on('connection', (socket) => {
         });
       }, 600);
     }
+  });
+
+  // ── 再來一局 ──
+  socket.on('rematch', () => {
+    const code = socket.roomCode;
+    const room = rooms.get(code);
+    if (!room) return;
+    if (room.state && room.state.gameOver) {
+      if (room.timerId) clearTimeout(room.timerId);
+      room.state = null;
+      room.ready = [false, false];
+      room.ships = [null, null];
+    }
+    // 不用發送事件，因為雙方前端按下再來一局後都會自行回到 PLACEMENT 畫面
   });
 
   // ── 請求隨機擺放 ──
